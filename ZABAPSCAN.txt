@@ -1,0 +1,113 @@
+*&---------------------------------------------------------------*
+*& name:        ZABAPSCAN
+*& description: Scan ZABAPS for keywords
+*& author:      cave beat
+*& date:        14-09-07
+*& reason:      faster report search
+*& demander:    I
+*&---------------------------------------------------------------*
+
+*TOP Include - Globale Variablen, Typen, Selection-Screen
+INCLUDE zabapscan_top.
+*INCLUDE zabapscan_o01.                           "  PBO-Modules
+*INCLUDE zabapscan_i01.                           "  PAI-Modules
+*F01 Include - Unterprogramme
+INCLUDE zabapscan_f01.
+*E01 Include - Events
+INCLUDE zabapscan_e01.
+*Accounting Log
+INCLUDE zabapacc.
+
+*&---------------------------------------------------------------*
+START-OF-SELECTION.
+*&---------------------------------------------------------------*
+
+  PERFORM isovolta_abap_accounting.
+
+* Range für Reportselektion erstellen
+  PERFORM cre_range.
+* Schlüsselwörter aus Eingabe ermitteln
+  PERFORM cre_key CHANGING gt_key.
+
+* alle Reportnamen die in die Kriterien fallen ermitteln
+  SELECT t~obj_name r~cnam r~cdat
+    FROM ( tadir AS t INNER JOIN reposrc AS r
+    ON t~obj_name EQ r~progname )
+    INTO TABLE gt_tadir
+    WHERE object EQ 'PROG'
+      AND t~obj_name IN rat_name
+      AND r~cnam IN so_cnam
+      AND t~devclass IN so_devcl
+      AND r~cdat IN so_cdat
+      AND r~unam IN so_unam.
+
+* Lesen der Reports und Scan nach Keywords
+  PERFORM read_reports USING gt_tadir
+                             gt_key
+                    CHANGING gt_reposrc.
+  FREE gt_tadir.
+* Konvertieren der Ergebnisse
+  PERFORM conv_tbl USING gt_reposrc
+                CHANGING gt_abap
+                         g_hits.
+  FREE: gt_reposrc.
+
+* Überschrift und Fehlermeldung
+  PERFORM write_head USING g_hits.
+  CLEAR: g_hits.
+
+*Sortieren nach Name oder Treffer
+  IF pa_alph EQ 'X'.
+    SORT gt_abap BY name ASCENDING.
+  ELSE.
+    SORT gt_abap BY hits DESCENDING name ASCENDING.
+  ENDIF.
+
+*Output
+  LOOP AT gt_abap INTO gs_abap.
+    FORMAT COLOR OFF INTENSIFIED OFF .
+    WRITE: / gs_abap-name,
+             gs_abap-text,
+             gs_abap-cnam,
+             gs_abap-cdat,
+             gs_abap-hits.
+    HIDE:    gs_abap-name,
+             gs_abap-text,
+             gs_abap-cnam,
+             gs_abap-cdat,
+             gs_abap-hits.
+    gt_src = gs_abap-src.
+    LOOP AT gt_src INTO gs_src.
+
+      WRITE: / gs_src-line.
+      HIDE: gs_src-line.
+      PERFORM col_src USING gs_src-source
+                            gt_key.
+      WRITE: 131 gs_src-cnt INVERSE ON.
+      HIDE:  gs_src-cnt.
+
+    ENDLOOP.
+    SKIP.
+  ENDLOOP.
+
+  CLEAR: gs_abap,
+         gs_src.
+  REFRESH: gt_src.
+
+
+
+
+
+
+
+
+*  DATA col TYPE i VALUE 0.
+*
+*  DO 8 TIMES.
+*    col = sy-index - 1.
+*    FORMAT COLOR = col.
+*    WRITE: /  col              COLOR OFF,
+*             'INTENSIFIED ON'  INTENSIFIED ON,
+*             'INTENSIFIED OFF' INTENSIFIED OFF,
+*             'INVERSE ON'      INVERSE ON.
+*  ENDDO.

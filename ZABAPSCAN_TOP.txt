@@ -1,0 +1,118 @@
+*&---------------------------------------------------------------*
+*& Include ZABAPSCAN_TOP                         Report ZABAPSCAN
+*&---------------------------------------------------------------*
+
+* asdf sasdfortweise asdftest
+
+
+REPORT   zabapscan.
+
+TABLES: tadir,
+        trdir.
+
+*Table Directory
+*Katalog der Repository-Objekte
+TYPES: BEGIN OF tys_tadir,
+        obj_name TYPE sobj_name,
+        cnam LIKE trdir-cnam,
+        cdat LIKE trdir-cdat,
+       END OF tys_tadir,
+       tyt_tadir TYPE STANDARD TABLE OF tys_tadir.
+DATA: gt_tadir TYPE tyt_tadir.
+
+*Name als Suchkriterium Z bis Z______...
+TYPES: BEGIN OF tys_name,
+        sign(1)   TYPE c,
+        option(2) TYPE c,
+        low       LIKE tadir-obj_name,
+        high      LIKE tadir-obj_name,
+      END OF tys_name.
+DATA:   ra_name TYPE tys_name,
+        rat_name LIKE TABLE OF ra_name.
+
+DATA: g_name LIKE trdir-name,
+      g_cnt TYPE i,
+      g_tdfirst TYPE rstxp-tdfirst,
+      g_hits TYPE i.
+
+*Sourcecodezeile mit Programmname
+TYPES: BEGIN OF tys_reposrc,
+         name LIKE tadir-obj_name,
+         line TYPE i,
+         source TYPE char80,
+         text TYPE trdirt-text,
+         cnam TYPE trdir-cnam,
+         cdat TYPE trdir-cdat,
+       END OF tys_reposrc,
+       tyt_reposrc TYPE STANDARD TABLE OF tys_reposrc.
+DATA: gt_reposrc TYPE tyt_reposrc.
+
+*Sourcecode Zeile
+TYPES: BEGIN OF tys_src,
+         cnt TYPE i,
+         line TYPE i,
+         source TYPE char80,
+       END OF tys_src,
+       tyt_src TYPE STANDARD TABLE OF tys_src.
+DATA:  gs_src TYPE tys_src,
+       gt_src LIKE TABLE OF gs_src.
+
+*endgültige Ausgabetabelle
+TYPES: BEGIN OF tys_abap,
+        name LIKE tadir-obj_name,
+        text(64) TYPE c,
+        cnam LIKE trdir-cnam,
+        src LIKE gt_src,
+        cdat LIKE trdir-cdat,
+        hits TYPE i,
+       END OF tys_abap,
+       tyt_abap TYPE STANDARD TABLE OF tys_abap.
+DATA:  gs_abap TYPE tys_abap,
+       gt_abap TYPE tyt_abap.
+
+*Source & Color
+TYPES: BEGIN OF tys_col,
+         color TYPE i,
+         source TYPE char80,
+       END OF tys_col,
+       tyt_col TYPE STANDARD TABLE OF tys_col.
+DATA:  gs_col TYPE tys_col,
+       gt_col LIKE TABLE OF gs_col,
+       gt_tcol LIKE gt_col,
+       gs_tcol LIKE gs_col.
+
+
+*Schlüsselwörter und Tabelle dazu
+*DATA: g_key TYPE char80,
+DATA: gt_key TYPE TABLE OF char80.
+
+*----------------------------------------------------------------------*
+*   Batch Input Starten
+*----------------------------------------------------------------------*
+*       Batchinputdata of single transaction
+*DATA:   BDCDATA LIKE BDCDATA    OCCURS 0 WITH HEADER LINE.
+
+
+*Selektionsdynpro
+SELECTION-SCREEN BEGIN OF BLOCK t01 WITH FRAME TITLE text-t01.
+SELECTION-SCREEN SKIP.
+SELECTION-SCREEN BEGIN OF BLOCK t02 WITH FRAME .
+PARAMETERS: pa_key TYPE char80 OBLIGATORY.       "Suchwort
+SELECTION-SCREEN END OF BLOCK t02.
+SELECTION-SCREEN SKIP.
+
+SELECT-OPTIONS: so_cnam FOR trdir-cnam MATCHCODE OBJECT user_addr,
+                so_unam FOR trdir-unam,
+                so_devcl FOR tadir-devclass,
+                so_cdat FOR trdir-cdat.
+
+SELECTION-SCREEN ULINE.
+PARAMETERS:     pa_name TYPE char40.
+SELECTION-SCREEN SKIP.
+
+SELECTION-SCREEN COMMENT /1(20) text-t14.
+
+PARAMETERS:     pa_hits RADIOBUTTON GROUP radi DEFAULT 'X',
+                pa_alph RADIOBUTTON GROUP radi.
+
+SELECTION-SCREEN END OF BLOCK t01.

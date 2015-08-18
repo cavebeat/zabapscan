@@ -1,0 +1,68 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZABAPSCAN_E01
+*&---------------------------------------------------------------------*
+
+AT LINE-SELECTION.
+  g_cnt = gs_src-cnt.
+  g_name = gs_abap-name.
+  g_tdfirst = gs_src-line.
+
+  IF gs_abap-name IS INITIAL.
+    LOOP AT gt_abap INTO gs_abap.
+      gt_src = gs_abap-src.
+      LOOP AT gt_src INTO gs_src.
+        IF gs_src-cnt EQ g_cnt.
+          g_name = gs_abap-name.
+          g_tdfirst = gs_src-line.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+  ENDIF.
+
+  CLEAR: gs_abap,
+         gs_src.
+
+*  PERFORM bdc_dynpro      USING 'SAPLWBABAP' '0100'.
+*  PERFORM bdc_field       USING 'RS38M-PROGRAMM'
+*                                g_name.
+*  PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                '=SHOP'.
+*  PERFORM bdc_dynpro      USING 'SAPLS38E' '0400'.
+*  PERFORM bdc_field       USING 'RSTXP-TDFIRST'
+*                                g_tdfirst.
+*  PERFORM bdc_field       USING 'BDC_OKCODE'
+*                                '=OK'.
+*  CALL TRANSACTION 'SE38' USING bdcdata MODE 'E'.
+*  REFRESH: bdcdata.
+
+  CALL FUNCTION 'RS_TOOL_ACCESS'
+    EXPORTING
+      operation                 = 'SHOW'
+      object_name               = g_name
+       object_type              = 'PROG'
+*        ENCLOSING_OBJECT          =
+      position                  = g_tdfirst
+*        DEVCLASS                  =
+*        INCLUDE                   =
+*        VERSION                   = ' '
+*        MONITOR_ACTIVATION        = 'X'
+*        WB_MANAGER                =
+*        IN_NEW_WINDOW             =
+*        WITH_OBJECTLIST           = ' '
+*        WITH_WORKLIST             = ' '
+*      IMPORTING
+*        NEW_NAME                  =
+*        WB_TODO_REQUEST           =
+*      TABLES
+*        OBJLIST                   =
+*      CHANGING
+*        P_REQUEST                 = ' '
+   EXCEPTIONS
+     not_executed              = 1
+     invalid_object_type       = 2
+     OTHERS                    = 3    .
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.

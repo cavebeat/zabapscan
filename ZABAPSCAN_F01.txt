@@ -1,0 +1,397 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZABAPSCAN_F01
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*&      Form  cre_range
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM cre_range.
+  DATA: l_length TYPE i.
+
+  CLEAR: ra_name.
+  REFRESH: rat_name.
+  ra_name-low = 'Z'. "000000000000000000000000000000000000000
+  ra_name-high = 'Z_______________________________________'.
+
+  ra_name-sign = 'I'.
+  ra_name-option = 'BT'.
+  IF NOT pa_name IS INITIAL.
+    l_length = STRLEN( pa_name ).
+    ra_name-low+0(l_length) = pa_name+0(l_length).
+    ra_name-high+0(l_length) = pa_name+0(l_length).
+  ENDIF.
+
+  IF ra_name-low CA '*'.
+    ra_name-option = 'CP'.
+    CLEAR: ra_name-high.
+  ENDIF.
+
+  APPEND ra_name TO rat_name.
+  CLEAR: ra_name.
+
+ENDFORM.                    " cre_range
+
+
+*&---------------------------------------------------------------------*
+*&      Form  get_text
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+
+FORM get_text  USING    pu_obj_name TYPE any
+               CHANGING pc_text TYPE any.
+
+  SELECT SINGLE text
+    FROM trdirt
+    INTO pc_text
+    WHERE name EQ pu_obj_name
+      AND sprsl EQ sy-langu.
+  IF NOT sy-subrc IS INITIAL.
+    SELECT SINGLE text
+      FROM trdirt
+      INTO pc_text
+      WHERE name EQ pu_obj_name
+        AND sprsl EQ 'D' .
+    IF NOT sy-subrc IS INITIAL.
+      SELECT SINGLE text
+        FROM trdirt
+        INTO pc_text
+        WHERE name EQ pu_obj_name
+          AND sprsl EQ 'E'.
+      IF sy-subrc IS INITIAL.
+        SELECT SINGLE text
+          FROM trdirt
+          INTO pc_text
+          WHERE name EQ pu_obj_name.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                    " get_text
+
+
+**------------------------------------------------------------------*
+**        Start new screen
+**------------------------------------------------------------------*
+*FORM BDC_DYNPRO USING PROGRAM DYNPRO.
+*  CLEAR BDCDATA.
+*  BDCDATA-PROGRAM  = PROGRAM.
+*  BDCDATA-DYNPRO   = DYNPRO.
+*  BDCDATA-DYNBEGIN = 'X'.
+*  APPEND BDCDATA.
+*ENDFORM.
+
+**--------------------------------------------------------------------*
+**        Insert field
+**--------------------------------------------------------------------*
+*FORM BDC_FIELD USING FNAM FVAL.
+*    CLEAR BDCDATA.
+*    BDCDATA-FNAM = FNAM.
+*    BDCDATA-FVAL = FVAL.
+*    APPEND BDCDATA.
+*ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&      Form  read_reports
+*&---------------------------------------------------------------------*
+*       Lesen der Reports
+*----------------------------------------------------------------------*
+FORM read_reports USING put_tadir TYPE tyt_tadir
+                        put_key LIKE gt_key
+               CHANGING pct_reposrc TYPE tyt_reposrc.
+
+*Lokale Variablen innerhalb des Unterprogramms
+  DATA: ls_tadir TYPE tys_tadir,
+        l_obj_name LIKE trdir-name,
+        l_line TYPE char255,
+        lt_line LIKE TABLE OF l_line,
+        l_text TYPE trdirt-text,
+        ls_reposrc TYPE tys_reposrc,
+        l_flag TYPE c,
+        l_idx TYPE i,
+        l_tabix LIKE sy-tabix,
+        l_key TYPE char80.
+
+  LOOP AT put_tadir INTO ls_tadir.
+    l_obj_name = ls_tadir-obj_name.
+    REFRESH lt_line.
+
+*   einlesen der Reports mittels eigenen Kommandos
+    READ REPORT l_obj_name INTO lt_line.
+    LOOP AT put_key INTO l_key.
+      l_idx = 0.
+      l_flag = ' ' .
+*   solange suchen bis alle werte gefunden wurden.
+      WHILE l_flag EQ ' ' .
+        l_idx = l_idx + 1 .
+*     durchsuchen des Reports nach Schlüsselwort.
+        SEARCH lt_line
+          FOR l_key
+          IN CHARACTER MODE
+          STARTING AT l_idx.
+
+        IF sy-subrc IS INITIAL.
+          l_tabix = sy-tabix.
+          READ TABLE lt_line
+            INDEX l_tabix
+            INTO l_line.
+
+          MOVE: l_tabix TO l_idx.
+
+          PERFORM get_text USING l_obj_name
+                        CHANGING l_text.
+          ls_reposrc-text = l_text.
+          ls_reposrc-name = l_obj_name.
+          ls_reposrc-source = l_line.
+          ls_reposrc-line = l_tabix.
+          ls_reposrc-cnam = ls_tadir-cnam.
+          ls_reposrc-cdat = ls_tadir-cdat.
+
+          APPEND: ls_reposrc to pct_reposrc.
+          CLEAR: ls_reposrc.
+        ELSE.
+*       Wenn kein Ergebnis gefunden wurde abbrechen
+          l_flag = 'X'.
+        ENDIF.
+
+      ENDWHILE.
+    ENDLOOP.
+  ENDLOOP.
+
+  sort pct_reposrc by name.
+
+ENDFORM.                    " read_reports
+
+
+*&---------------------------------------------------------------------*
+*&      Form  cre_key
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM cre_key CHANGING pct_key LIKE gt_key.
+
+  DATA: l_flag TYPE c,
+        l_cnt TYPE i,
+        l_len TYPE i VALUE '1',
+        l_off TYPE i,
+        l_key TYPE char80.
+
+  pa_key+79(1) = ' '.
+
+  WHILE l_flag EQ ' ' .
+    IF pa_key+l_cnt(1) EQ ' '.
+      MOVE: pa_key+l_off(l_len) TO l_key.
+      CONDENSE l_key.
+      IF NOT l_key IS INITIAL.
+        COLLECT l_key INTO pct_key.
+      ENDIF.
+      l_off = l_cnt.
+      ADD 1 TO l_off.
+      CLEAR: l_len.
+    ENDIF.
+
+    IF l_cnt EQ 39.
+      l_flag = 'X'.
+    ENDIF.
+
+    ADD 1 TO l_cnt.
+    ADD 1 TO l_len.
+  ENDWHILE.
+ENDFORM.                    " cre_key
+
+
+*&---------------------------------------------------------------------*
+*&      Form  conv_tbl
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM conv_tbl USING put_reposrc TYPE tyt_reposrc
+           CHANGING pct_abap TYPE tyt_abap
+                    pc_hits TYPE i.
+
+  DATA: l_cnt TYPE i,
+        ls_reposrc TYPE tys_reposrc,
+        ls_src TYPE tys_src,
+        lt_src TYPE tyt_src,
+        ls_abap TYPE tys_abap.
+
+  LOOP AT put_reposrc INTO ls_reposrc.
+    ADD 1 TO l_cnt.
+    ls_src-cnt     = l_cnt.
+    ls_src-line    = ls_reposrc-line.
+    ls_src-source  = ls_reposrc-source.
+    APPEND ls_src TO lt_src.
+
+    ls_abap-text = ls_reposrc-text.
+    ls_abap-cnam = ls_reposrc-cnam.
+    ls_abap-name = ls_reposrc-name.
+    ls_abap-cdat = ls_reposrc-cdat.
+
+    AT END OF name.
+
+      SORT lt_src BY line.
+      DESCRIBE TABLE lt_src LINES ls_abap-hits.
+      ls_abap-src = lt_src.
+      REFRESH: lt_src.
+      APPEND ls_abap TO pct_abap.
+      CLEAR: ls_abap.
+    ENDAT.
+
+  ENDLOOP.
+  pc_hits = l_cnt.
+
+ENDFORM.                    " conv_tbl
+
+
+*&---------------------------------------------------------------------*
+*&      Form  write_head
+*&---------------------------------------------------------------------*
+*       Überschrift
+*----------------------------------------------------------------------*
+FORM write_head USING pu_hits TYPE i.
+
+  DATA: l_cnt TYPE i,
+        l_char(20) TYPE c,
+        l_char1(20) TYPE c,
+        l_head(120) TYPE c.
+
+  IF gt_abap IS INITIAL.
+    SKIP.
+    WRITE: / text-t05.
+    SKIP. SKIP.
+    WRITE: / text-t06.
+    SKIP.
+    WRITE: / text-t07,
+           / text-t08,
+           / text-t09,
+           / text-t10,
+           / text-t11,
+           / text-t12.
+  ELSE.
+    DESCRIBE TABLE gt_abap LINES l_cnt.
+    MOVE: pu_hits TO l_char,
+          l_cnt TO l_char1.
+    CONDENSE: l_char, l_char1.
+    CONCATENATE: l_head text-t13 INTO l_head.
+    CONCATENATE: l_head '+' l_char INTO l_head.
+    CONCATENATE: l_head '+' text-t02 INTO l_head.
+    CONCATENATE: l_head '+' text-t03 INTO l_head.
+    CONCATENATE: l_head '+' l_char1 INTO l_head.
+    CONCATENATE: l_head '+' text-t04 INTO l_head.
+    REPLACE '+' WITH ' ' INTO l_head.
+    REPLACE '+' WITH ' ' INTO l_head.
+    REPLACE '+' WITH ' ' INTO l_head.
+    REPLACE '+' WITH ' ' INTO l_head.
+    REPLACE '+' WITH ' ' INTO l_head.
+    sy-tvar0 = l_head+0(20).
+    sy-tvar1 = l_head+20(20).
+    sy-tvar2 = l_head+40(20).
+    sy-tvar3 = l_head+60(20).
+  ENDIF.
+ENDFORM.                    " write_head
+
+
+*&---------------------------------------------------------------------*
+*&      Form  col_src
+*&---------------------------------------------------------------------*
+*       Colorieren Text
+*----------------------------------------------------------------------*
+
+FORM col_src USING pu_source TYPE any
+                   put_key LIKE gt_key.
+
+  DATA: l_moff TYPE i,
+        l_mlen TYPE i,
+        l_off TYPE i,
+        l_toff TYPE i,
+        l_string TYPE string,
+        l_lin TYPE i,
+        l_cnt TYPE i.
+
+*Lokale Variablen innerhalb des Unterprogramms
+  DATA: ls_tadir TYPE tys_tadir,
+        l_obj_name LIKE trdir-name,
+        l_line TYPE char255,
+        lt_line LIKE TABLE OF l_line,
+        l_text TYPE trdirt-text,
+        ls_reposrc TYPE tys_reposrc,
+        l_flag TYPE c,
+        l_tabix LIKE sy-tabix,
+        l_key TYPE char80.
+
+  DESCRIBE TABLE put_key LINES l_lin.
+
+  gs_col-color = 0.
+  gs_col-source = pu_source.
+  APPEND gs_col TO gt_col.
+
+  LOOP AT put_key INTO l_key.
+*    l_cnt = l_cnt + 1 .
+*    l_flag = ' ' .
+
+
+*   solange suchen bis alle werte gefunden wurden.
+    LOOP AT gt_col INTO gs_col.
+      CLEAR: l_flag.
+      l_off = 0.
+      WHILE l_flag EQ ' '.
+*   durchsuchen des Reports nach Schlüsselwort.
+        FIND l_key
+          IN SECTION OFFSET l_off OF gs_col-source
+          IGNORING CASE
+          MATCH OFFSET l_moff
+          MATCH LENGTH l_mlen.
+
+        IF sy-subrc IS INITIAL.
+          IF l_off <> l_moff.
+            l_toff = l_moff - l_off.
+            gs_tcol-source = gs_col-source+l_off(l_toff).
+            gs_tcol-color = gs_col-color.
+            APPEND gs_tcol TO gt_tcol.
+          ENDIF.
+
+          gs_tcol-source = gs_col-source+l_moff(l_mlen).
+          gs_tcol-color = 1.
+          APPEND gs_tcol TO gt_tcol.
+        ELSE.
+          l_toff = 80 - l_off.
+          l_off = l_off.
+          gs_tcol-source = gs_col-source+l_off(l_toff).
+          gs_tcol-color = gs_col-color.
+          APPEND gs_tcol TO gt_tcol.
+          l_flag = 'X'.
+          l_cnt = l_cnt + 1 .
+        ENDIF.
+        l_off = l_moff + l_mlen.
+      ENDWHILE.
+
+    ENDLOOP.
+
+    REFRESH: gt_col.
+    gt_col = gt_tcol.
+    REFRESH: gt_tcol.
+  ENDLOOP.
+
+  LOOP AT gt_col INTO gs_col.
+    MOVE gs_col-source TO l_string.
+    IF gs_col-color EQ 1.
+      FORMAT COLOR 3  INTENSIFIED OFF .
+    ENDIF.
+    WRITE l_string NO-GAP .
+    IF gs_col-color EQ 1.
+      FORMAT COLOR OFF INTENSIFIED OFF .
+    ENDIF.
+    CLEAR: l_string.
+  ENDLOOP.
+  REFRESH: gt_col,
+           gt_tcol.
+  CLEAR: gs_col,
+         gs_tcol.
+ENDFORM.                    " col_src
